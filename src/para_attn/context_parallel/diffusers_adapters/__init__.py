@@ -43,3 +43,25 @@ def parallelize_pipe(pipe: DiffusionPipeline, *args, **kwargs):
     adapter_module = importlib.import_module(f".{adapter_name}", __package__)
     parallelize_pipe_fn = getattr(adapter_module, "parallelize_pipe")
     return parallelize_pipe_fn(pipe, *args, **kwargs)
+
+
+def partial_parallelize_pipe(pipe: DiffusionPipeline, *args, **kwargs):
+    assert isinstance(pipe, DiffusionPipeline)
+
+    pipe_cls_name = pipe.__class__.__name__
+    if False:
+        pass
+    elif pipe_cls_name.startswith("Flux"):
+        adapter_name = "flux"
+    elif pipe_cls_name.startswith("Mochi"):
+        adapter_name = "mochi"
+    elif pipe_cls_name.startswith("CogVideoX"):
+        adapter_name = "cogvideox"
+    elif pipe_cls_name.startswith("HunyuanVideo"):
+        adapter_name = "hunyuan_video"
+    else:
+        raise ValueError(f"Unknown pipeline class name: {pipe_cls_name}")
+
+    adapter_module = importlib.import_module(f".{adapter_name}", __package__)
+    parallelize_pipe_fn = getattr(adapter_module, "partial_parallelize_pipe")
+    return parallelize_pipe_fn(pipe, *args, **kwargs)

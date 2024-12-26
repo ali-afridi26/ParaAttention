@@ -81,7 +81,6 @@ def parallelize_transformer(transformer: FluxTransformer2DModel, *, mesh=None):
 
 def parallelize_pipe(pipe: DiffusionPipeline, *, shallow_patch: bool = False, **kwargs):
     original_call = pipe.__class__.__call__
-
     if not getattr(original_call, "_is_parallelized", False):
 
         @functools.wraps(original_call)
@@ -102,7 +101,36 @@ def parallelize_pipe(pipe: DiffusionPipeline, *, shallow_patch: bool = False, **
         pipe.__class__.__call__ = new_call
 
     if not shallow_patch:
+
         parallelize_transformer(pipe.transformer, **kwargs)
+
+    pipe._is_parallelized = True
+
+    return pipe
+def partial_parallelize_pipe(pipe: DiffusionPipeline, *, shallow_patch: bool = False, **kwargs):
+    original_call = pipe.__class__.__call__
+    if not getattr(original_call, "_is_parallelized", False):
+
+        @functools.wraps(original_call)
+        def new_call(self, *args, generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None, **kwargs):
+            if generator is None and getattr(self, "_is_parallelized", False):
+                seed = torch.seed()
+                seed += torch.iinfo(torch.int64).min
+                seed_t = torch.full([1], seed, dtype=torch.int64, device=self.device)
+                seed_t = DP.get_complete_tensor(seed_t, dim=0)
+                seed_t = DP.get_assigned_chunk(seed_t, dim=0, idx=0)
+                seed = seed_t.item()
+                seed -= torch.iinfo(torch.int64).min
+                generator = torch.Generator(self.device).manual_seed(seed)
+            return original_call(self, *args, generator=generator, **kwargs)
+
+        new_call._is_parallelized = True
+
+        pipe.__class__.__call__ = new_call
+
+    # if not shallow_patch:
+
+    #     parallelize_transformer(pipe.transformer, **kwargs)
 
     pipe._is_parallelized = True
 
